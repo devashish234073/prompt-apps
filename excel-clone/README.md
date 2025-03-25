@@ -7,17 +7,16 @@ Below were the prompts done:
 2. when loading data from file I want some additional rows and cloumns to be added where formulas can be written, can you do that? like 4 rows and 2 columns additional
 3. can you simplify the formula calculation logic by having the cells id like A1, B2, etc depending on row and column so as to make finding the cells easier
 4. in this part instead of just onBlur I also want enter pressed to do teh same:
-
+```
 input.addEventListener('blur', function () {
                             evaluateFormulas();
                         });
-
-also don
+```
 5. also don't remove the formula after evaluating, when the cells with formula are double clicked it should show the formula that was used and let me edit it and when it blur or enter is pressed again the formula should re evaluate
 6. I modifed some part of the code to support average by changing calculateSum to calculate and adding operation as the first argument. 
 
 I want you to modify the calling function especially this part: instead of it chcking formula.startsWith('SUM(') it should take ot the SUM( part dynamically even not use hardcoded 4 length
-
+```
 if (formula.startsWith('SUM(') && formula.endsWith(')')) {
                     const range = formula.substring(4, formula.length - 1);
                     const [startRef, endRef] = range.split(':');
@@ -26,3 +25,4 @@ if (formula.startsWith('SUM(') && formula.endsWith(')')) {
                         return calculate("SUM",startRef, endRef, cellValues);
                     }
                 }
+```
