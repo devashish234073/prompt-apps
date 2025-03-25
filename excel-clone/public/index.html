@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Clone</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .formula-cell {
+            font-style: italic;
+            color: #0078d4;
+        }
+
+        #menu-bar {
+            background-color: #f3f3f3;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .menu-btn {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .menu-btn:hover {
+            background-color: #ddd;
+        }
+
+        .menu-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+        }
+
+        .menu-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        .menu-content a:hover {
+            background-color: #ddd;
+        }
+
+        .menu:hover .menu-content {
+            display: block;
+        }
+
+        #spreadsheet-container {
+            overflow: auto;
+            margin: 20px;
+        }
+
+        #spreadsheet {
+            border-collapse: collapse;
+        }
+
+        #spreadsheet th,
+        #spreadsheet td {
+            border: 1px solid #ddd;
+            padding: 3px;
+            min-width: 100px;
+        }
+
+        #spreadsheet th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+
+        #spreadsheet td {
+            height: 25px;
+        }
+
+        #spreadsheet td input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .selected {
+            background-color: #d4e6f7;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="menu-bar">
+        <div class="menu">
+            <button class="menu-btn">File</button>
+            <div class="menu-content">
+                <a href="#" id="open-file">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept=".csv,.xlsx">
+
+    <div id="spreadsheet-container">
+        <table id="spreadsheet">
+            <thead>
+                <tr id="header-row"></tr>
+            </thead>
+            <tbody id="sheet-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const fileInput = document.getElementById('file-input');
+            const openFileBtn = document.getElementById('open-file');
+            const spreadsheet = document.getElementById('spreadsheet');
+            const headerRow = document.getElementById('header-row');
+            const sheetBody = document.getElementById('sheet-body');
+
+            let spreadsheetData = [];
+            let selectedCell = null;
+
+            // Initialize with empty spreadsheet
+            initializeSpreadsheet(10, 10);
+
+            // File menu click handler
+            openFileBtn.addEventListener('click', function () {
+                fileInput.click();
+            });
+
+            // File input change handler
+            fileInput.addEventListener('change', function (e) {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    uploadFile(file);
+                }
+            });
+
+            // Upload file to server
+            function uploadFile(file) {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        displayData(data);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error loading file');
+                    });
+            }
+
+            function getCellReference(row, col) {
+                // Convert column number to letters (0 -> A, 1 -> B, ..., 25 -> Z, 26 -> AA, etc.)
+                let colLetters = '';
+                let colNum = col + 1; // 1-based
+
+                while (colNum > 0) {
+                    const remainder = (colNum - 1) % 26;
+                    colLetters = String.fromCharCode(65 + remainder) + colLetters;
+                    colNum = Math.floor((colNum - 1) / 26);
+                }
+
+                return colLetters + (row + 1);
+            }
+
+            // Display data in spreadsheet
+            function displayData(data) {
+                // Clear existing data
+                headerRow.innerHTML = '';
+                sheetBody.innerHTML = '';
+
+                // Determine number of columns from data or use default
+                const dataCols = data.headers ? data.headers.length :
+                    (data.rows && data.rows.length > 0 ? data.rows[0].length : 0);
+                const totalCols = Math.max(dataCols, 10) + 2; // Add 2 extra columns
+
+                // Determine number of rows from data or use default
+                const dataRows = data.rows ? data.rows.length : 0;
+                const totalRows = Math.max(dataRows, 10) + 4; // Add 4 extra rows
+
+                // Create headers
+                // Add empty cell for corner
+                headerRow.appendChild(document.createElement('th'));
+
+                // Add column headers (A, B, C, ...)
+                for (let i = 0; i < totalCols; i++) {
+                    const th = document.createElement('th');
+                    th.textContent = String.fromCharCode(65 + i);
+                    headerRow.appendChild(th);
+                }
+
+                // Create rows
+                for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+                    const tr = document.createElement('tr');
+
+                    // Add row number
+                    const th = document.createElement('th');
+                    th.textContent = rowIndex + 1;
+                    tr.appendChild(th);
+
+                    // Add cells
+                    for (let colIndex = 0; colIndex < totalCols; colIndex++) {
+                        const td = document.createElement('td');
+                        const input = document.createElement('input');
+                        input.type = 'text';
+
+                        // Set cell reference as data attributes
+                        td.dataset.row = rowIndex;
+                        td.dataset.col = colIndex;
+                        input.dataset.cellRef = getCellReference(rowIndex, colIndex);
+                        // Fill with file data if available
+                        if (rowIndex < dataRows && colIndex < dataCols) {
+                            input.value = data.rows[rowIndex][colIndex] || '';
+                        } else {
+                            input.value = '';
+                        }
+
+                        input.addEventListener('focus', function () {
+                            if (selectedCell) {
+                                selectedCell.classList.remove('selected');
+                            }
+                            selectedCell = td;
+                            td.classList.add('selected');
+                        });
+
+                        input.addEventListener('dblclick', function () {
+                            if (this.dataset.formula) {
+                                this.value = this.dataset.formula;
+                                this.classList.remove('formula-cell');
+                            }
+                        });
+
+                        input.addEventListener('blur', function () {
+                            // If it's a formula cell and we're showing the formula (from double-click)
+                            if (this.dataset.formula && !this.classList.contains('formula-cell')) {
+                                evaluateFormulas();
+                            }
+                            // For regular cells, just evaluate
+                            else {
+                                evaluateFormulas();
+                            }
+                        });
+
+                        input.addEventListener('keydown', function (e) {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                // Similar logic to blur
+                                if (this.dataset.formula && !this.classList.contains('formula-cell')) {
+                                    evaluateFormulas();
+                                } else {
+                                    evaluateFormulas();
+                                }
+                                // Move to next cell
+                                const currentTd = this.parentElement;
+                                const nextRow = currentTd.parentElement.nextElementSibling;
+                                if (nextRow) {
+                                    const nextInput = nextRow.children[currentTd.cellIndex].querySelector('input');
+                                    if (nextInput) nextInput.focus();
+                                }
+                            }
+                        });
+
+                        td.appendChild(input);
+                        tr.appendChild(td);
+                    }
+
+                    sheetBody.appendChild(tr);
+                }
+
+                // Store the data
+                spreadsheetData = Array(totalRows).fill().map((_, rowIndex) => {
+                    return Array(totalCols).fill().map((_, colIndex) => {
+                        return (rowIndex < dataRows && colIndex < dataCols) ?
+                            (data.rows[rowIndex][colIndex] || '') : '';
+                    });
+                });
+            }
+
+            // Initialize empty spreadsheet
+            function initializeSpreadsheet(rows, cols) {
+                // Clear existing data
+                headerRow.innerHTML = '';
+                sheetBody.innerHTML = '';
+
+                // Add column headers (A, B, C, ...)
+                headerRow.appendChild(document.createElement('th'));
+                for (let i = 0; i < cols; i++) {
+                    const th = document.createElement('th');
+                    th.textContent = String.fromCharCode(65 + i);
+                    headerRow.appendChild(th);
+                }
+
+                // Add rows
+                for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+                    const tr = document.createElement('tr');
+
+                    // Add row number
+                    const th = document.createElement('th');
+                    th.textContent = rowIndex + 1;
+                    tr.appendChild(th);
+
+                    // Add empty cells
+                    for (let colIndex = 0; colIndex < cols; colIndex++) {
+                        const td = document.createElement('td');
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = '';
+
+                        input.addEventListener('focus', function () {
+                            if (selectedCell) {
+                                selectedCell.classList.remove('selected');
+                            }
+                            selectedCell = td;
+                            td.classList.add('selected');
+                        });
+
+                        input.addEventListener('blur', function () {
+                            evaluateFormulas();
+                        });
+
+                        td.appendChild(input);
+                        tr.appendChild(td);
+                    }
+
+                    sheetBody.appendChild(tr);
+                }
+
+                // Initialize empty data
+                spreadsheetData = Array(rows).fill().map(() => Array(cols).fill(''));
+            }
+
+            // Evaluate formulas in the spreadsheet
+            function evaluateFormulas() {
+                const allCells = sheetBody.querySelectorAll('td');
+
+                // First pass: collect all cell values
+                const cellValues = {};
+                allCells.forEach(td => {
+                    const input = td.querySelector('input');
+                    const cellRef = input.dataset.cellRef;
+                    const value = input.value.trim();
+
+                    // Store original formula if it is one
+                    if (value.startsWith('=')) {
+                        input.dataset.formula = value;
+                        cellValues[cellRef] = value; // Store the formula
+                    } else {
+                        cellValues[cellRef] = value; // Store the value
+                    }
+                });
+
+                // Second pass: evaluate formulas
+                allCells.forEach(td => {
+                    const input = td.querySelector('input');
+                    const formula = input.dataset.formula;
+
+                    if (formula) {
+                        try {
+                            const result = evaluateFormula(formula, cellValues);
+                            input.value = result;
+                            input.classList.add('formula-cell');
+                        } catch (e) {
+                            input.value = '#ERROR!';
+                            input.classList.add('formula-cell');
+                        }
+                    }
+                });
+            }
+
+            function evaluateFormula(formula, cellValues) {
+                formula = formula.substring(1).toUpperCase();
+
+                // Extract function name and arguments using regex
+                const fnMatch = formula.match(/^([A-Z]+)\(([^)]*)\)$/);
+                if (!fnMatch) return '#SYNTAX_ERROR!';
+
+                const fnName = fnMatch[1]; // "SUM", "AVERAGE", etc.
+                const args = fnMatch[2];   // Everything inside parentheses
+
+                if (fnName === 'SUM' || fnName === 'AVERAGE' || fnName === 'AVG') {
+                    const [startRef, endRef] = args.split(':');
+
+                    if (startRef && endRef) {
+                        return calculate(fnName, startRef, endRef, cellValues);
+                    }
+                }
+
+                return `#UNKNOWN_FN: ${fnName}!`;
+            }
+
+            function calculate(operation, startRef, endRef, cellValues) {
+                const startCoords = parseCellReference(startRef);
+                const endCoords = parseCellReference(endRef);
+
+                if (!startCoords || !endCoords) return 0;
+
+                let operationOut = 0;
+                let count = 0;
+
+                for (let col = startCoords.col; col <= endCoords.col; col++) {
+                    for (let row = startCoords.row; row <= endCoords.row; row++) {
+                        const cellRef = getCellReference(row, col);
+                        const value = cellValues[cellRef] || '';
+
+                        // Skip if it's a formula or empty
+                        if (value.startsWith('=')) continue;
+                        if (value === '') continue;
+
+                        const num = parseFloat(value);
+                        if (!isNaN(num)) {
+                            operationOut += num;
+                            count++;
+                        }
+                    }
+                }
+                if (operation == "SUM") {
+                    //operationOut = operationOut;
+                } else if (operation == "AVG") {
+                    operationOut = operationOut / count;
+                }
+
+                return count > 0 ? operationOut : 0;
+            }
+
+            function parseCellReference(ref) {
+                const match = ref.match(/^([A-Z]+)(\d+)$/i);
+                if (!match) return null;
+
+                const colLetters = match[1].toUpperCase();
+                const rowNumber = parseInt(match[2]);
+
+                // Convert column letters to 0-based index
+                let colNumber = 0;
+                for (let i = 0; i < colLetters.length; i++) {
+                    colNumber = colNumber * 26 + (colLetters.charCodeAt(i) - 64);
+                }
+                colNumber--; // Convert to 0-based
+
+                return { row: rowNumber - 1, col: colNumber };
+            }
+        });
+    </script>
+</body>
+
+</html>
