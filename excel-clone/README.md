@@ -1,5 +1,15 @@
 # this application was created by doing prompts in deepseek
 
+To start the app do :
+```
+git clone https://github.com/devashish234073/prompt-apps
+cd prompt-apps
+cd excel-clone
+npm install
+node server.js
+```
+youtube video for reference: https://www.youtube.com/watch?v=5Y0LNj0BRD8
+
 Below were the prompts done:
 
 1. build an excel clone using nodejs as backend and add htmls for ui, html should have a file menu with sub menu that lets me choose an excel file from my machine then it sends it to the backend, backend should be able to open .csv and .xlsx files and send the data to front end. The excel on the front end should have formula processing cababilities , for now just support the SUM formula
