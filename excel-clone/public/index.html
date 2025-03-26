@@ -103,6 +103,43 @@
         .selected {
             background-color: #d4e6f7;
         }
+
+        /* Add to your existing CSS */
+        .filter-icon {
+            margin-left: 5px;
+            cursor: pointer;
+            color: #555;
+        }
+
+        .filter-dropdown {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            padding: 10px;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .filter-item {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .filter-item:hover {
+            background: #f0f0f0;
+        }
+
+        .filter-checkbox {
+            margin-right: 8px;
+        }
+
+        .filter-controls {
+            border-top: 1px solid #ddd;
+            margin-top: 5px;
+            padding-top: 5px;
+        }
     </style>
 </head>
 
@@ -112,6 +149,13 @@
             <button class="menu-btn">File</button>
             <div class="menu-content">
                 <a href="#" id="open-file">Open</a>
+            </div>
+        </div>
+        <div class="menu">
+            <button class="menu-btn">Data</button>
+            <div class="menu-content">
+                <a href="#" id="add-filter">Filter</a>
+                <a href="#" id="clear-filter">Clear Filter</a>
             </div>
         </div>
     </div>
@@ -129,6 +173,183 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+
+            // Add these variables at the top
+            let filters = {};
+            let filterDropdown = null;
+
+            // Add event listeners for the new menu items
+            document.getElementById('add-filter').addEventListener('click', addFilters);
+            document.getElementById('clear-filter').addEventListener('click', clearFilters);
+
+            // Add filter functionality
+            function addFilters() {
+                // Clear any existing filters first
+                clearFilters();
+
+                // Create filter dropdowns for each column
+                const headers = headerRow.querySelectorAll('th');
+                headers.forEach((header, index) => {
+                    if (index === 0) return; // Skip row number column
+
+                    // Add filter icon
+                    const filterIcon = document.createElement('span');
+                    filterIcon.className = 'filter-icon';
+                    filterIcon.innerHTML = '▼';
+                    filterIcon.dataset.column = index;
+                    header.appendChild(filterIcon);
+
+                    // Create dropdown menu
+                    const dropdown = document.createElement('div');
+                    dropdown.className = 'filter-dropdown';
+                    dropdown.style.display = 'none';
+                    dropdown.dataset.column = index;
+                    document.body.appendChild(dropdown);
+
+                    // Get unique values for this column
+                    const values = getColumnValues(index);
+
+                    // Populate dropdown
+                    values.forEach(value => {
+                        const item = document.createElement('div');
+                        item.className = 'filter-item';
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'filter-checkbox';
+                        checkbox.value = value;
+                        checkbox.checked = true;
+
+                        item.appendChild(checkbox);
+                        item.appendChild(document.createTextNode(value));
+                        dropdown.appendChild(item);
+                    });
+
+                    // Add filter controls
+                    const controls = document.createElement('div');
+                    controls.className = 'filter-controls';
+
+                    const selectAll = document.createElement('a');
+                    selectAll.textContent = 'Select All';
+                    selectAll.style.marginRight = '10px';
+                    selectAll.addEventListener('click', () => {
+                        dropdown.querySelectorAll('.filter-checkbox').forEach(cb => cb.checked = true);
+                        applyFilter(index);
+                    });
+
+                    const clearAll = document.createElement('a');
+                    clearAll.textContent = 'Clear All';
+                    clearAll.addEventListener('click', () => {
+                        dropdown.querySelectorAll('.filter-checkbox').forEach(cb => cb.checked = false);
+                        applyFilter(index);
+                    });
+
+                    controls.appendChild(selectAll);
+                    controls.appendChild(clearAll);
+                    dropdown.appendChild(controls);
+
+                    // Toggle dropdown on icon click
+                    filterIcon.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeAllDropdowns();
+
+                        // Position dropdown
+                        const rect = filterIcon.getBoundingClientRect();
+                        dropdown.style.left = `${rect.left}px`;
+                        dropdown.style.top = `${rect.bottom}px`;
+                        dropdown.style.display = 'block';
+                        filterDropdown = dropdown;
+                    });
+
+                    // Update filters when checkboxes change
+                    dropdown.querySelectorAll('.filter-checkbox').forEach(checkbox => {
+                        checkbox.addEventListener('change', () => applyFilter(index));
+                    });
+                });
+
+                // Close dropdown when clicking elsewhere
+                document.addEventListener('click', closeAllDropdowns);
+            }
+
+            function getColumnValues(columnIndex) {
+                const values = new Set();
+                const rows = sheetBody.querySelectorAll('tr');
+
+                rows.forEach(row => {
+                    const cell = row.children[columnIndex];
+                    if (cell) {
+                        const input = cell.querySelector('input');
+                        if (input) {
+                            values.add(input.value.trim() || '(Blank)');
+                        }
+                    }
+                });
+
+                return Array.from(values).sort();
+            }
+
+            function applyFilter(columnIndex) {
+                const dropdown = document.querySelector(`.filter-dropdown[data-column="${columnIndex}"]`);
+                if (!dropdown) return;
+
+                // Get selected values
+                const selectedValues = [];
+                dropdown.querySelectorAll('.filter-checkbox:checked').forEach(checkbox => {
+                    selectedValues.push(checkbox.value);
+                });
+
+                // Store filter
+                filters[columnIndex] = selectedValues;
+
+                // Apply filter to rows
+                const rows = sheetBody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    if (row.children.length <= columnIndex) return;
+
+                    const cell = row.children[columnIndex];
+                    const input = cell.querySelector('input');
+                    const value = input ? (input.value.trim() || '(Blank)') : '';
+
+                    // Show/hide row based on filter
+                    let shouldShow = true;
+                    for (const [col, values] of Object.entries(filters)) {
+                        const cell = row.children[col];
+                        const input = cell.querySelector('input');
+                        const cellValue = input ? (input.value.trim() || '(Blank)') : '';
+
+                        if (!values.includes(cellValue)) {
+                            shouldShow = false;
+                            break;
+                        }
+                    }
+
+                    row.style.display = shouldShow ? '' : 'none';
+                });
+            }
+
+            function clearFilters() {
+                // Remove all filter UI
+                document.querySelectorAll('.filter-icon').forEach(icon => icon.remove());
+                document.querySelectorAll('.filter-dropdown').forEach(dd => dd.remove());
+                filters = {};
+
+                // Show all rows
+                sheetBody.querySelectorAll('tr').forEach(row => {
+                    row.style.display = '';
+                });
+
+                // Remove event listener
+                document.removeEventListener('click', closeAllDropdowns);
+                filterDropdown = null;
+            }
+
+            function closeAllDropdowns() {
+                if (filterDropdown) {
+                    filterDropdown.style.display = 'none';
+                    filterDropdown = null;
+                }
+            }
+
             const fileInput = document.getElementById('file-input');
             const openFileBtn = document.getElementById('open-file');
             const spreadsheet = document.getElementById('spreadsheet');

@@ -36,3 +36,4 @@ if (formula.startsWith('SUM(') && formula.endsWith(')')) {
                     }
                 }
 ```
+7. can you modify the ui by adding a data menu and undet it add a filter that creates a filter just like excel
