@@ -1,3 +1,6 @@
+![image](https://github.com/user-attachments/assets/28ca2959-e9ba-4b39-8ba4-dcc8a9f87879)
+
+
 # this application was created by doing prompts in deepseek
 
 To start the app do :
