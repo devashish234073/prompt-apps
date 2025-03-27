@@ -140,6 +140,21 @@
             margin-top: 5px;
             padding-top: 5px;
         }
+
+        /* Add to your existing CSS */
+        .cell-selected {
+            background-color: #d4e6f7;
+            border: 1px solid #7db0e8;
+        }
+
+        .range-selected {
+            background-color: #e1f0fd;
+            border: 1px solid #7db0e8;
+        }
+
+        .range-corner {
+            background-color: #7db0e8;
+        }
     </style>
 </head>
 
@@ -177,6 +192,191 @@
             // Add these variables at the top
             let filters = {};
             let filterDropdown = null;
+
+            // Add these variables at the top
+            let isSelecting = false;
+            let startCell = null;
+            let selectedRange = {
+                startRow: -1,
+                startCol: -1,
+                endRow: -1,
+                endCol: -1
+            };
+
+            document.addEventListener('mousemove', function (e) {
+                if (!isSelecting) return;
+
+                const hoveredCell = e.target.closest('td');
+                if (!hoveredCell || !startCell) return;
+
+                clearSelection();
+
+                const startRow = parseInt(startCell.dataset.row);
+                const startCol = parseInt(startCell.dataset.col);
+                const endRow = parseInt(hoveredCell.dataset.row);
+                const endCol = parseInt(hoveredCell.dataset.col);
+                console.log("yes its selecting");
+
+                selectedRange = {
+                    startRow: Math.min(startRow, endRow),
+                    startCol: Math.min(startCol, endCol),
+                    endRow: Math.max(startRow, endRow),
+                    endCol: Math.max(startCol, endCol)
+                };
+
+                highlightSelection();
+            });
+
+            document.addEventListener('mouseup', function () {
+                isSelecting = false;
+            });
+
+            // Add copy functionality
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.key === 'c') {
+                    copySelection();
+                }
+                // Add to your existing keydown listener
+                if (e.ctrlKey && e.key === 'a') {
+                    e.preventDefault();
+                    selectAll();
+                }
+            });
+
+            function clearSelection() {
+                document.querySelectorAll('.cell-selected, .range-selected, .range-corner').forEach(el => {
+                    el.classList.remove('cell-selected', 'range-selected', 'range-corner');
+                });
+            }
+
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.key === 'v') {
+                    e.preventDefault();
+                    navigator.clipboard.readText().then(text => {
+                        pasteData(text);
+                    });
+                }
+            });
+
+            function pasteData(csvData) {
+                const { startRow, startCol } = selectedRange;
+                const rows = csvData.split('\n').filter(row => row.trim() !== '');
+
+                rows.forEach((row, rowOffset) => {
+                    const values = parseCSVRow(row);
+                    const rowElement = sheetBody.querySelector(`tr:nth-child(${startRow + rowOffset + 1})`);
+                    if (!rowElement) return;
+
+                    values.forEach((value, colOffset) => {
+                        const cell = rowElement.querySelector(`td:nth-child(${startCol + colOffset + 2})`);
+                        if (!cell) return;
+
+                        const input = cell.querySelector('input');
+                        if (input) {
+                            input.value = value;
+                            input.dispatchEvent(new Event('change'));
+                        }
+                    });
+                });
+            }
+
+            function parseCSVRow(row) {
+                // Simple CSV parser - for more complex cases use a library
+                const result = [];
+                let inQuotes = false;
+                let currentValue = '';
+
+                for (let i = 0; i < row.length; i++) {
+                    const char = row[i];
+
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(currentValue);
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+
+                result.push(currentValue);
+                return result;
+            }
+
+            function highlightSelection() {
+                const { startRow, startCol, endRow, endCol } = selectedRange;
+
+                for (let row = startRow; row <= endRow; row++) {
+                    const rowElement = sheetBody.querySelector(`tr:nth-child(${row + 1})`);
+                    if (!rowElement) continue;
+
+                    for (let col = startCol; col <= endCol; col++) {
+                        const cell = rowElement.querySelector(`td:nth-child(${col + 2})`); // +2 for row number column
+                        if (!cell) continue;
+
+                        // Add appropriate class based on cell position
+                        if ((row === startRow && col === startCol) ||
+                            (row === endRow && col === endCol) ||
+                            (row === startRow && col === endCol) ||
+                            (row === endRow && col === startCol)) {
+                            cell.classList.add('range-corner');
+                        } else {
+                            cell.classList.add('range-selected');
+                        }
+                    }
+                }
+            }
+
+            function copySelection() {
+                const { startRow, startCol, endRow, endCol } = selectedRange;
+                let csvData = '';
+
+                for (let row = startRow; row <= endRow; row++) {
+                    const rowElement = sheetBody.querySelector(`tr:nth-child(${row + 1})`);
+                    if (!rowElement) continue;
+
+                    let rowValues = [];
+
+                    for (let col = startCol; col <= endCol; col++) {
+                        const cell = rowElement.querySelector(`td:nth-child(${col + 2})`);
+                        if (!cell) continue;
+
+                        const input = cell.querySelector('input');
+                        let value = input ? input.value : '';
+
+                        // Handle CSV escaping
+                        if (value.includes('"') || value.includes(',') || value.includes('\n')) {
+                            value = `"${value.replace(/"/g, '""')}"`;
+                        }
+
+                        rowValues.push(value);
+                    }
+
+                    csvData += rowValues.join(',') + '\r\n';
+                }
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(csvData).then(() => {
+                    console.log('Copied to clipboard');
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                });
+            }
+
+            function selectAll() {
+                const rows = sheetBody.querySelectorAll('tr');
+                if (rows.length === 0) return;
+
+                selectedRange = {
+                    startRow: 0,
+                    startCol: 0,
+                    endRow: rows.length - 1,
+                    endCol: rows[0].children.length - 2 // -2 for row number column
+                };
+
+                clearSelection();
+                highlightSelection();
+            }
 
             // Add event listeners for the new menu items
             document.getElementById('add-filter').addEventListener('click', addFilters);
@@ -448,6 +648,25 @@
                         const td = document.createElement('td');
                         const input = document.createElement('input');
                         input.type = 'text';
+                        // Modify cell creation to add mouse event listeners
+                        input.addEventListener('mousedown', function (e) {
+                            if (e.detail === 2) { // Double click
+                                console.log("double click done...");
+                                isSelecting = true;
+                                startCell = this.parentElement;
+                                clearSelection();
+                                startCell.classList.add('cell-selected');
+
+                                const row = parseInt(startCell.dataset.row);
+                                const col = parseInt(startCell.dataset.col);
+                                selectedRange = {
+                                    startRow: row,
+                                    startCol: col,
+                                    endRow: row,
+                                    endCol: col
+                                };
+                            }
+                        });
 
                         // Set cell reference as data attributes
                         td.dataset.row = rowIndex;

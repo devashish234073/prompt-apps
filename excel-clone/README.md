@@ -37,3 +37,4 @@ if (formula.startsWith('SUM(') && formula.endsWith(')')) {
                 }
 ```
 7. can you modify the ui by adding a data menu and undet it add a filter that creates a filter just like excel
+8. I want multiple cell selection ability in the ui just like excel. I should be able to just start with a double click on a cell immediately followed by a drag and it should be able to select the cells I have hovered and when I do a ctrl+c it should be able to copy those data as if it were a csv data i.e. commas for separting columns and \r\n for rows
