@@ -1,3 +1,5 @@
 excel-clone/node_modules
+excel-clone/output/*
+excel-clone/outputs/*
 excel-clone/excel-clone.exe
 node_modules
