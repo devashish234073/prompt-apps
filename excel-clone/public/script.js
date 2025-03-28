@@ -14,6 +14,19 @@ document.addEventListener('DOMContentLoaded', function () {
         endCol: -1
     };
 
+    if (window.preloadedFile) {
+        fetch('/load-file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ path: window.preloadedFile })
+        })
+            .then(response => response.json())
+            .then(data => displayData(data))
+            .catch(error => console.error('Error:', error));
+    }
+
     document.addEventListener('mousemove', function (e) {
         if (!isSelecting) return;
 
@@ -64,27 +77,36 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.ctrlKey && e.key === 'v') {
             e.preventDefault();
             navigator.clipboard.readText().then(text => {
+                console.log("text to be pasted",text);
+                //console.log("pasteData",pasteData);
                 pasteData(text);
             });
         }
     });
 
     function pasteData(csvData) {
+        //console.log("selectedRange",selectedRange)
         const { startRow, startCol } = selectedRange;
         const rows = csvData.split('\n').filter(row => row.trim() !== '');
+        console.log("rows",rows);
 
         rows.forEach((row, rowOffset) => {
             const values = parseCSVRow(row);
+            console.log("processing",values);
             const rowElement = sheetBody.querySelector(`tr:nth-child(${startRow + rowOffset + 1})`);
+            console.log("rowElement",rowElement);
             if (!rowElement) return;
 
             values.forEach((value, colOffset) => {
                 const cell = rowElement.querySelector(`td:nth-child(${startCol + colOffset + 2})`);
+                console.log("cell",cell);
                 if (!cell) return;
 
                 const input = cell.querySelector('input');
                 if (input) {
                     input.value = value;
+                    console.log("input",input);
+                    console.log("value",value);
                     input.dispatchEvent(new Event('change'));
                 }
             });
@@ -168,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Copy to clipboard
         navigator.clipboard.writeText(csvData).then(() => {
-            console.log('Copied to clipboard');
+            console.log('Copied to clipboard',csvData);
         }).catch(err => {
             console.error('Failed to copy:', err);
         });

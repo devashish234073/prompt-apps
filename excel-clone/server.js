@@ -39,33 +39,24 @@ app.use(express.static('public'));
 const filePathFromArgs = process.argv[2];
 console.log("filePathFromArgs", filePathFromArgs);
 // Modify your existing route to handle pre-loaded files
+const startFilePath = path.join(__dirname, 'public', 'start.html');
+const startFileData = String(fs.readFileSync(startFilePath));
 app.get('/', (req, res) => {
     if (filePathFromArgs) {
         console.log("trying to load preloaded file", filePathFromArgs);
-        res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Excel Clone</title>
-                <script>
+        res.send(startFileData.replace("__ADDITIONAL_SCRIPTS_1__",`<script>
                     window.preloadedFile = '${filePathFromArgs.replace(/\\/g, '\\\\')}';
-                </script>
-            </head>
-            <body>
-                <script src="/app.js"></script>
-            </body>
-            </html>
-        `);
+                </script>`));
     } else {
-        console.log("opening start.html");
-        res.sendFile(path.join(__dirname, 'public', 'start.html'));
+        console.log("opening empty sheet");
+        res.send(startFileData.replace("__ADDITIONAL_SCRIPTS_1__",""));
     }
 });
 
 // Add this endpoint to server.js
 app.post('/load-file', express.json(), (req, res) => {
     const filePath = req.body.path;
-    console.log("trying yo load preloaded file", filePath);
+    console.log("/load-file called: trying to load preloaded file", filePath);
     const fileExtension = path.extname(filePath).toLowerCase();
 
     try {
