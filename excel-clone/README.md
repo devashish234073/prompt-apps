@@ -41,3 +41,32 @@ if (formula.startsWith('SUM(') && formula.endsWith(')')) {
 ```
 7. can you modify the ui by adding a data menu and undet it add a filter that creates a filter just like excel
 8. I want multiple cell selection ability in the ui just like excel. I should be able to just start with a double click on a cell immediately followed by a drag and it should be able to select the cells I have hovered and when I do a ctrl+c it should be able to copy those data as if it were a csv data i.e. commas for separting columns and \r\n for rows
+9. also can you add ability to register this as a service in windows laptop, so that see this as a valid app when right clicking on csv or xlsx files
+10. I am getting this error:
+PS D:\Progs\nodejs\prompt-apps\excel-clone> npm run build    
+
+> excel-clone@1.0.0 build
+> pkg . --targets node16-win-x64 --output excel-clone.exe
+
+> pkg@5.8.1
+> Error! Property 'bin' does not exist in
+  D:\Progs\nodejs\prompt-apps\excel-clone\package.json
+11. my inno compile is failing , these are some last lines of logs before it failed:
+
+   Compressing: D:\Progs\nodejs\prompt-apps\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\busboy\bench\bench-multipart-fields-100mb-big.js
+   Compressing: D:\Progs\nodejs\prompt-apps\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\busboy\bench\bench-multipart-fields-100mb-small.js
+   Compressing: D:\Progs\nodejs\prompt-apps\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\busboy\bench\bench-multipart-files-100mb-big.js
+   Compressing: D:\Progs\nodejs\prompt-apps\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\busboy\bench\bench-multipart-files-100mb-small.js
+   Compressing: D:\Progs\nodejs\prompt-apps\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\busboy\bench\bench-urlencoded-fields-100pairs-small.js
+   Compressing: D:\Progs\nodejs\prompt-apps\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\excel-clone\node_modules\busboy\bench\bench-urlencoded-fields-900pairs-small-alt.js
+*** Compile aborted.
+12. why is vscode adding this excel-clone dependency in my package.json. If I am removing it manually , its immediately adding it back:
+
+"dependencies": {
+    "cors": "^2.8.5",
+    "csv-parser": "^3.0.0",
+    "excel-clone": "file:",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5"
+  }
