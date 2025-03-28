@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Clone</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .formula-cell {
+            font-style: italic;
+            color: #0078d4;
+        }
+
+        #menu-bar {
+            background-color: #f3f3f3;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .menu-btn {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .menu-btn:hover {
+            background-color: #ddd;
+        }
+
+        .menu-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+        }
+
+        .menu-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        .menu-content a:hover {
+            background-color: #ddd;
+        }
+
+        .menu:hover .menu-content {
+            display: block;
+        }
+
+        #spreadsheet-container {
+            overflow: auto;
+            margin: 20px;
+        }
+
+        #spreadsheet {
+            border-collapse: collapse;
+        }
+
+        #spreadsheet th,
+        #spreadsheet td {
+            border: 1px solid #ddd;
+            padding: 3px;
+            min-width: 100px;
+        }
+
+        #spreadsheet th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+
+        #spreadsheet td {
+            height: 25px;
+        }
+
+        #spreadsheet td input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .selected {
+            background-color: #d4e6f7;
+        }
+
+        /* Add to your existing CSS */
+        .filter-icon {
+            margin-left: 5px;
+            cursor: pointer;
+            color: #555;
+        }
+
+        .filter-dropdown {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            padding: 10px;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .filter-item {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .filter-item:hover {
+            background: #f0f0f0;
+        }
+
+        .filter-checkbox {
+            margin-right: 8px;
+        }
+
+        .filter-controls {
+            border-top: 1px solid #ddd;
+            margin-top: 5px;
+            padding-top: 5px;
+        }
+
+        /* Add to your existing CSS */
+        .cell-selected {
+            background-color: #d4e6f7;
+            border: 1px solid #7db0e8;
+        }
+
+        .range-selected {
+            background-color: #e1f0fd;
+            border: 1px solid #7db0e8;
+        }
+
+        .range-corner {
+            background-color: #7db0e8;
+        }
+    </style>
+    __ADDITIONAL_SCRIPTS_1__
+</head>
+
+<body>
+    <div id="menu-bar">
+        <div class="menu">
+            <button class="menu-btn">File</button>
+            <div class="menu-content">
+                <a href="#" id="open-file">Open</a>
+            </div>
+        </div>
+        <div class="menu">
+            <button class="menu-btn">Data</button>
+            <div class="menu-content">
+                <a href="#" id="add-filter">Filter</a>
+                <a href="#" id="clear-filter">Clear Filter</a>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept=".csv,.xlsx">
+
+    <div id="spreadsheet-container">
+        <table id="spreadsheet">
+            <thead>
+                <tr id="header-row"></tr>
+            </thead>
+            <tbody id="sheet-body"></tbody>
+        </table>
+    </div>
+
+    __ADDITIONAL_SCRIPTS_2__
+    <script src="script.js"></script>
+</body>
+
+</html>
