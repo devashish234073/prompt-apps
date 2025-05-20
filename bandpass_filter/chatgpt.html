@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bandpass Filter Demo</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    canvas { width: 100%; height: 100px; background: #111; }
+    label { display: block; margin-top: 1em; }
+    input[type=range] { width: 100%; }
+    button { margin: 0.5em 0; padding: 0.5em; }
+  </style>
+</head>
+<body>
+  <h2>Bandpass Filter Demo</h2>
+
+  <label>
+    Upload Audio File:
+    <input type="file" id="fileInput" accept="audio/*">
+  </label>
+
+  <label>
+    Or Record Audio:
+    <button id="recordBtn">Start Recording</button>
+    <button id="stopRecordBtn" disabled>Stop</button>
+  </label>
+
+  <label>
+    Frequency Spectrum:
+    <canvas id="spectrum" width="600" height="100"></canvas>
+  </label>
+
+  <label>
+    Min Frequency: <span id="minFreqLabel">300</span> Hz
+    <input type="range" id="minFreq" min="20" max="20000" value="300">
+  </label>
+
+  <label>
+    Max Frequency: <span id="maxFreqLabel">3000</span> Hz
+    <input type="range" id="maxFreq" min="20" max="20000" value="3000">
+  </label>
+
+  <button id="applyFilter">Apply Bandpass Filter</button>
+  <button id="playOriginal">Play Original</button>
+  <button id="playFiltered">Play Filtered</button>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const recordBtn = document.getElementById('recordBtn');
+    const stopRecordBtn = document.getElementById('stopRecordBtn');
+    const playOriginalBtn = document.getElementById('playOriginal');
+    const playFilteredBtn = document.getElementById('playFiltered');
+    const applyFilterBtn = document.getElementById('applyFilter');
+    const minFreqSlider = document.getElementById('minFreq');
+    const maxFreqSlider = document.getElementById('maxFreq');
+    const minFreqLabel = document.getElementById('minFreqLabel');
+    const maxFreqLabel = document.getElementById('maxFreqLabel');
+    const canvas = document.getElementById('spectrum');
+    const ctx = canvas.getContext('2d');
+
+    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let originalBuffer = null;
+    let filteredBuffer = null;
+    let mediaRecorder, recordedChunks = [];
+
+    minFreqSlider.oninput = () => minFreqLabel.textContent = minFreqSlider.value;
+    maxFreqSlider.oninput = () => maxFreqLabel.textContent = maxFreqSlider.value;
+
+    function drawSpectrum(buffer) {
+      const tempCtx = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
+      const source = tempCtx.createBufferSource();
+      source.buffer = buffer;
+      const analyser = tempCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      analyser.connect(tempCtx.destination);
+      source.start();
+      tempCtx.startRendering().then(() => {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'lime';
+        for (let i = 0; i < data.length; i++) {
+          const val = data[i];
+          ctx.fillRect(i, canvas.height - val, 2, val);
+        }
+      });
+    }
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const arrayBuffer = await file.arrayBuffer();
+      originalBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      drawSpectrum(originalBuffer);
+    });
+
+    recordBtn.onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      recordedChunks = [];
+      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+        const arrayBuffer = await blob.arrayBuffer();
+        originalBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        drawSpectrum(originalBuffer);
+      };
+      mediaRecorder.start();
+      recordBtn.disabled = true;
+      stopRecordBtn.disabled = false;
+    };
+
+    stopRecordBtn.onclick = () => {
+      mediaRecorder.stop();
+      recordBtn.disabled = false;
+      stopRecordBtn.disabled = true;
+    };
+
+    playOriginalBtn.onclick = () => {
+      if (!originalBuffer) return;
+      const source = audioCtx.createBufferSource();
+      source.buffer = originalBuffer;
+      source.connect(audioCtx.destination);
+      source.start();
+    };
+
+    applyFilterBtn.onclick = () => {
+      if (!originalBuffer) return;
+      const minF = parseFloat(minFreqSlider.value);
+      const maxF = parseFloat(maxFreqSlider.value);
+
+      const offlineCtx = new OfflineAudioContext(
+        originalBuffer.numberOfChannels,
+        originalBuffer.length,
+        originalBuffer.sampleRate
+      );
+
+      const source = offlineCtx.createBufferSource();
+      source.buffer = originalBuffer;
+
+      const bandpass = offlineCtx.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      bandpass.frequency.value = (minF + maxF) / 2;
+      bandpass.Q.value = (bandpass.frequency.value) / (maxF - minF);
+
+      source.connect(bandpass);
+      bandpass.connect(offlineCtx.destination);
+
+      source.start();
+      offlineCtx.startRendering().then(renderedBuffer => {
+        filteredBuffer = renderedBuffer;
+        drawSpectrum(filteredBuffer);
+      });
+    };
+
+    playFilteredBtn.onclick = () => {
+      if (!filteredBuffer) return;
+      const source = audioCtx.createBufferSource();
+      source.buffer = filteredBuffer;
+      source.connect(audioCtx.destination);
+      source.start();
+    };
+  </script>
+</body>
+</html>

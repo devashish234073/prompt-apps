@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-T">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Bandpass Filter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+            color: #1f2937; /* Tailwind gray-800 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem; /* Tailwind rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Tailwind shadow-lg */
+            width: 100%;
+            max-width: 700px;
+        }
+        h1, h2, h3 {
+            color: #111827; /* Tailwind gray-900 */
+        }
+        label {
+            font-weight: 500; /* Tailwind font-medium */
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        input[type="file"], input[type="range"], button, audio {
+            margin-bottom: 1rem;
+            border-radius: 0.375rem; /* Tailwind rounded-md */
+        }
+        input[type="file"] {
+            border: 1px solid #d1d5db; /* Tailwind gray-300 */
+            padding: 0.5rem;
+        }
+        button {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2563eb; /* Tailwind blue-600 */
+        }
+        button:disabled {
+            background-color: #9ca3af; /* Tailwind gray-400 */
+            cursor: not-allowed;
+        }
+        .slider-container {
+            margin-bottom: 1rem;
+        }
+        .slider-container label {
+            display: inline-block;
+            min-width: 150px;
+        }
+        .slider-container input[type="range"] {
+            width: calc(100% - 220px);
+            vertical-align: middle;
+        }
+        .slider-container span {
+            display: inline-block;
+            min-width: 60px;
+            text-align: right;
+            font-family: monospace;
+        }
+        #statusMessage {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 0.375rem; /* Tailwind rounded-md */
+            text-align: center;
+        }
+        .status-error {
+            background-color: #fee2e2; /* Tailwind red-100 */
+            color: #b91c1c; /* Tailwind red-700 */
+        }
+        .status-success {
+            background-color: #d1fae5; /* Tailwind green-100 */
+            color: #047857; /* Tailwind green-700 */
+        }
+        audio {
+            width: 100%;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold mb-6 text-center">Audio Bandpass Filter</h1>
+
+        <div class="mb-6 p-4 border border-gray-200 rounded-lg">
+            <h2 class="text-xl font-semibold mb-3">1. Input Audio</h2>
+            <div>
+                <label for="audioFile" class="text-gray-700">Upload Audio File:</label>
+                <input type="file" id="audioFile" accept="audio/*" class="w-full">
+            </div>
+            <div class="mt-4">
+                <button id="recordButton" class="w-full sm:w-auto">Record from Mic</button>
+                <button id="stopRecordButton" disabled class="w-full sm:w-auto mt-2 sm:mt-0 sm:ml-2">Stop Recording</button>
+            </div>
+        </div>
+
+        <div id="originalAudioSection" class="mb-6 p-4 border border-gray-200 rounded-lg hidden">
+            <h3 class="text-lg font-semibold mb-2">Original Audio</h3>
+            <audio id="originalAudioPlayer" controls></audio>
+            <p id="freqRangeInfo" class="text-sm text-gray-600 mt-2">Input characteristics: N/A</p>
+        </div>
+
+        <div class="mb-6 p-4 border border-gray-200 rounded-lg">
+            <h2 class="text-xl font-semibold mb-3">2. Configure Filter</h2>
+            <div class="slider-container">
+                <label for="minFreq">Min Frequency:</label>
+                <input type="range" id="minFreq" min="20" max="22050" value="300" class="align-middle">
+                <span id="minFreqValue">300 Hz</span>
+            </div>
+            <div class="slider-container">
+                <label for="maxFreq">Max Frequency:</label>
+                <input type="range" id="maxFreq" min="20" max="22050" value="3000" class="align-middle">
+                <span id="maxFreqValue">3000 Hz</span>
+            </div>
+            <button id="applyFilterButton" disabled class="w-full mt-4">Apply Filter</button>
+        </div>
+
+        <div id="filteredAudioSection" class="mb-6 p-4 border border-gray-200 rounded-lg hidden">
+            <h2 class="text-xl font-semibold mb-3">3. Filtered Audio</h2>
+            <audio id="filteredAudioPlayer" controls></audio>
+            </div>
+
+        <div id="statusMessage"></div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const audioFileInput = document.getElementById('audioFile');
+        const recordButton = document.getElementById('recordButton');
+        const stopRecordButton = document.getElementById('stopRecordButton');
+        const originalAudioPlayer = document.getElementById('originalAudioPlayer');
+        const originalAudioSection = document.getElementById('originalAudioSection');
+        const freqRangeInfo = document.getElementById('freqRangeInfo');
+        const minFreqSlider = document.getElementById('minFreq');
+        const maxFreqSlider = document.getElementById('maxFreq');
+        const minFreqValueDisplay = document.getElementById('minFreqValue');
+        const maxFreqValueDisplay = document.getElementById('maxFreqValue');
+        const applyFilterButton = document.getElementById('applyFilterButton');
+        const filteredAudioPlayer = document.getElementById('filteredAudioPlayer');
+        const filteredAudioSection = document.getElementById('filteredAudioSection');
+        // const playFilteredButton = document.getElementById('playFilteredButton');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // Audio Variables
+        let audioCtx;
+        let originalBuffer; // AudioBuffer of the uploaded/recorded sound
+        let filteredBuffer; // AudioBuffer of the filtered sound
+        let mediaRecorder;
+        let audioChunks = [];
+        let maxFrequencyForSliders = 22050; // Default max, will be updated by audio sample rate
+
+        // Initialize AudioContext
+        function initAudioContext() {
+            if (!audioCtx) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    showStatus("Web Audio API is not supported in this browser.", true);
+                    console.error("Error creating AudioContext:", e);
+                }
+            }
+        }
+
+        // --- Input Handling ---
+        audioFileInput.addEventListener('change', handleFileUpload);
+        recordButton.addEventListener('click', startRecording);
+        stopRecordButton.addEventListener('click', stopRecording);
+
+        function handleFileUpload(event) {
+            initAudioContext();
+            if (!audioCtx) return;
+
+            const files = event.target.files;
+            if (files.length === 0) {
+                showStatus("No file selected.", true);
+                return;
+            }
+            const file = files[0];
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                showStatus("Decoding audio file...", false);
+                audioCtx.decodeAudioData(e.target.result)
+                    .then(decodedBuffer => {
+                        originalBuffer = decodedBuffer;
+                        processAudio(originalBuffer, URL.createObjectURL(file));
+                        showStatus("Audio file loaded and decoded.", false, true);
+                    })
+                    .catch(err => {
+                        showStatus(`Error decoding audio file: ${err.message}`, true);
+                        console.error("Error decoding audio data:", err);
+                    });
+            };
+            reader.onerror = () => {
+                showStatus("Error reading file.", true);
+                console.error("FileReader error:", reader.error);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function startRecording() {
+            initAudioContext();
+            if (!audioCtx) return;
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showStatus("Microphone recording is not supported in this browser.", true);
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    
+                    showStatus("Decoding recorded audio...", false);
+                    audioCtx.decodeAudioData(arrayBuffer)
+                        .then(decodedBuffer => {
+                            originalBuffer = decodedBuffer;
+                            processAudio(originalBuffer, URL.createObjectURL(audioBlob));
+                            showStatus("Recording finished and decoded.", false, true);
+                        })
+                        .catch(err => {
+                            showStatus(`Error decoding recorded audio: ${err.message}`, true);
+                            console.error("Error decoding recorded audio:", err);
+                        });
+                    
+                    // Clean up stream tracks
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                recordButton.disabled = true;
+                stopRecordButton.disabled = false;
+                audioFileInput.disabled = true;
+                showStatus("Recording started... Click 'Stop Recording' when done.", false);
+
+            } catch (err) {
+                showStatus(`Error accessing microphone: ${err.message}`, true);
+                console.error("Error getting user media:", err);
+                recordButton.disabled = false;
+                stopRecordButton.disabled = true;
+                audioFileInput.disabled = false;
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                mediaRecorder.stop();
+                recordButton.disabled = false;
+                stopRecordButton.disabled = true;
+                audioFileInput.disabled = false;
+                showStatus("Stopping recording...", false);
+            }
+        }
+
+        function processAudio(buffer, objectURL) {
+            originalBuffer = buffer; // Store the raw AudioBuffer
+
+            // Display original audio
+            originalAudioPlayer.src = objectURL; // Use object URL for the player
+            originalAudioSection.classList.remove('hidden');
+
+            // Update frequency range info and slider maximums
+            maxFrequencyForSliders = audioCtx.sampleRate / 2;
+            minFreqSlider.max = maxFrequencyForSliders;
+            maxFreqSlider.max = maxFrequencyForSliders;
+            
+            // Ensure current slider values are not out of new bounds
+            if (parseFloat(minFreqSlider.value) > maxFrequencyForSliders) {
+                minFreqSlider.value = maxFrequencyForSliders;
+            }
+            if (parseFloat(maxFreqSlider.value) > maxFrequencyForSliders) {
+                maxFreqSlider.value = maxFrequencyForSliders;
+            }
+            updateFrequencySliderValues(); // Update text displays too
+
+            freqRangeInfo.textContent = `Sample Rate: ${audioCtx.sampleRate} Hz. Max Filterable Frequency: ${maxFrequencyForSliders.toFixed(0)} Hz.`;
+            
+            applyFilterButton.disabled = false;
+            filteredAudioSection.classList.add('hidden'); // Hide old filtered results
+            filteredAudioPlayer.src = '';
+            // playFilteredButton.disabled = true;
+        }
+
+        // --- Filter Controls ---
+        minFreqSlider.addEventListener('input', updateFrequencySliderValues);
+        maxFreqSlider.addEventListener('input', updateFrequencySliderValues);
+        applyFilterButton.addEventListener('click', applyFilter);
+
+        function updateFrequencySliderValues() {
+            let minFreq = parseFloat(minFreqSlider.value);
+            let maxFreq = parseFloat(maxFreqSlider.value);
+
+            // Ensure minFreq is not greater than maxFreq
+            if (minFreq > maxFreq) {
+                if (event.target.id === 'minFreq') { // If min slider caused this
+                    maxFreqSlider.value = minFreq;
+                    maxFreq = minFreq;
+                } else { // If max slider caused this
+                    minFreqSlider.value = maxFreq;
+                    minFreq = maxFreq;
+                }
+            }
+            
+            minFreqValueDisplay.textContent = `${Math.round(minFreq)} Hz`;
+            maxFreqValueDisplay.textContent = `${Math.round(maxFreq)} Hz`;
+        }
+        
+        async function applyFilter() {
+            if (!originalBuffer || !audioCtx) {
+                showStatus("No audio loaded to filter.", true);
+                return;
+            }
+
+            applyFilterButton.disabled = true;
+            showStatus("Applying filter...", false);
+
+            const minFreq = parseFloat(minFreqSlider.value);
+            const maxFreq = parseFloat(maxFreqSlider.value);
+
+            if (minFreq >= maxFreq) {
+                showStatus("Min frequency must be less than Max frequency.", true);
+                applyFilterButton.disabled = false;
+                return;
+            }
+
+            // Create an OfflineAudioContext to render the filtered audio
+            // It has same number of channels, length and sample rate as the original buffer
+            const offlineCtx = new OfflineAudioContext(
+                originalBuffer.numberOfChannels,
+                originalBuffer.length,
+                originalBuffer.sampleRate
+            );
+
+            // Source node for the original audio
+            const source = offlineCtx.createBufferSource();
+            source.buffer = originalBuffer;
+
+            // Highpass filter
+            const highpassFilter = offlineCtx.createBiquadFilter();
+            highpassFilter.type = 'highpass';
+            highpassFilter.frequency.value = minFreq;
+            highpassFilter.Q.value = 1; // Default Q value
+
+            // Lowpass filter
+            const lowpassFilter = offlineCtx.createBiquadFilter();
+            lowpassFilter.type = 'lowpass';
+            lowpassFilter.frequency.value = maxFreq;
+            lowpassFilter.Q.value = 1; // Default Q value
+
+            // Connect the nodes: source -> highpass -> lowpass -> destination
+            source.connect(highpassFilter);
+            highpassFilter.connect(lowpassFilter);
+            lowpassFilter.connect(offlineCtx.destination);
+
+            source.start(0);
+
+            try {
+                // Render the audio
+                const renderedBuffer = await offlineCtx.startRendering();
+                filteredBuffer = renderedBuffer; // Store the filtered AudioBuffer
+
+                // Convert the filtered AudioBuffer to a WAV blob URL to play in <audio> element
+                const wavBlob = bufferToWave(filteredBuffer, filteredBuffer.length);
+                const wavUrl = URL.createObjectURL(wavBlob);
+                
+                filteredAudioPlayer.src = wavUrl;
+                filteredAudioSection.classList.remove('hidden');
+                // playFilteredButton.disabled = false;
+                showStatus("Filter applied successfully. You can now play the filtered audio.", false, true);
+            } catch (err) {
+                showStatus(`Error applying filter: ${err.message}`, true);
+                console.error("Error rendering filtered audio:", err);
+            } finally {
+                applyFilterButton.disabled = false;
+            }
+        }
+
+        // --- Output Handling ---
+        // playFilteredButton.addEventListener('click', playFilteredAudio); // Not strictly needed if using <audio controls>
+
+        /* // This function is an alternative if you want a dedicated play button
+           // instead of relying solely on the <audio> element's controls.
+        function playFilteredAudio() {
+            if (!filteredBuffer || !audioCtx) {
+                showStatus("No filtered audio to play.", true);
+                return;
+            }
+            const source = audioCtx.createBufferSource();
+            source.buffer = filteredBuffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+            showStatus("Playing filtered audio...", false);
+        }
+        */
+
+        // --- Utility Functions ---
+        function showStatus(message, isError = false, isSuccess = false) {
+            statusMessage.textContent = message;
+            statusMessage.className = ''; // Clear existing classes
+            if (isError) {
+                statusMessage.classList.add('status-error');
+            } else if (isSuccess) {
+                statusMessage.classList.add('status-success');
+            } else {
+                 statusMessage.classList.add('text-gray-700', 'bg-gray-100'); // Neutral
+            }
+        }
+
+        // Function to convert AudioBuffer to WAV Blob
+        // Adapted from: https://russellgood.com/how-to-convert-audiobuffer-to-audio-file/
+        function bufferToWave(abuffer, len) {
+            let numOfChan = abuffer.numberOfChannels,
+                length = len * numOfChan * 2 + 44,
+                buffer = new ArrayBuffer(length),
+                view = new DataView(buffer),
+                channels = [],
+                i, sample,
+                offset = 0,
+                pos = 0;
+
+            // write WAVE header
+            setUint32(0x46464952);                         // "RIFF"
+            setUint32(length - 8);                         // file length - 8
+            setUint32(0x45564157);                         // "WAVE"
+
+            setUint32(0x20746d66);                         // "fmt " chunk
+            setUint32(16);                                 // length = 16
+            setUint16(1);                                  // PCM (uncompressed)
+            setUint16(numOfChan);
+            setUint32(abuffer.sampleRate);
+            setUint32(abuffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
+            setUint16(numOfChan * 2);                      // block-align
+            setUint16(16);                                 // 16-bit (hardcoded in this demo)
+
+            setUint32(0x61746164);                         // "data" - chunk
+            setUint32(length - pos - 4);                   // chunk length
+
+            // write interleaved data
+            for (i = 0; i < abuffer.numberOfChannels; i++)
+                channels.push(abuffer.getChannelData(i));
+
+            while (pos < length) {
+                for (i = 0; i < numOfChan; i++) {             // interleave channels
+                    sample = Math.max(-1, Math.min(1, channels[i][offset])); // clamp
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767); // scale to 16-bit signed int
+                    view.setInt16(pos, sample, true);          // write 16-bit sample
+                    pos += 2;
+                }
+                offset++                                     // next source sample
+            }
+
+            return new Blob([buffer], {type: "audio/wav"});
+
+            function setUint16(data) {
+                view.setUint16(pos, data, true);
+                pos += 2;
+            }
+
+            function setUint32(data) {
+                view.setUint32(pos, data, true);
+                pos += 4;
+            }
+        }
+
+        // Initial setup
+        updateFrequencySliderValues(); // Set initial display for slider values
+        showStatus("Ready. Upload an audio file or record from microphone.", false);
+
+    </script>
+</body>
+</html>

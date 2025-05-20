@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Band Pass Filter Audio App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .input-section, .filter-section, .output-section {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .slider-container {
+            margin: 15px 0;
+        }
+        
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .slider-value {
+            display: inline-block;
+            min-width: 60px;
+            text-align: right;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 150px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        
+        .status {
+            color: #666;
+            font-style: italic;
+            margin-top: 5px;
+        }
+        
+        .audio-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        #fileInput {
+            margin: 10px 0;
+        }
+        
+        .recordings-list {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Band Pass Filter Audio App</h1>
+    
+    <div class="container">
+        <div class="input-section">
+            <h2>Input Audio</h2>
+            <p>Choose an audio source:</p>
+            
+            <div>
+                <button id="recordBtn">Record from Microphone</button>
+                <span id="recordingStatus" class="status"></span>
+            </div>
+            
+            <div>
+                <p>Or upload an audio file:</p>
+                <input type="file" id="fileInput" accept="audio/*">
+            </div>
+            
+            <div class="audio-control">
+                <button id="playInputBtn" disabled>Play Input</button>
+                <span id="inputDuration"></span>
+            </div>
+            
+            <h3>Input Frequency Analysis</h3>
+            <canvas id="inputCanvas"></canvas>
+        </div>
+        
+        <div class="filter-section">
+            <h2>Band Pass Filter Controls</h2>
+            
+            <div class="slider-container">
+                <label for="minFreq">
+                    Minimum Frequency: <span id="minFreqValue" class="slider-value">20</span> Hz
+                </label>
+                <input type="range" id="minFreq" min="20" max="20000" value="20" step="10">
+            </div>
+            
+            <div class="slider-container">
+                <label for="maxFreq">
+                    Maximum Frequency: <span id="maxFreqValue" class="slider-value">20000</span> Hz
+                </label>
+                <input type="range" id="maxFreq" min="20" max="20000" value="20000" step="10">
+            </div>
+            
+            <div class="slider-container">
+                <label for="quality">
+                    Filter Quality (Q): <span id="qualityValue" class="slider-value">1.0</span>
+                </label>
+                <input type="range" id="quality" min="0.1" max="10" value="1.0" step="0.1">
+            </div>
+            
+            <button id="applyFilterBtn" disabled>Apply Filter</button>
+        </div>
+        
+        <div class="output-section">
+            <h2>Filtered Output</h2>
+            <div class="audio-control">
+                <button id="playOutputBtn" disabled>Play Filtered Audio</button>
+                <span id="outputStatus" class="status"></span>
+            </div>
+            
+            <h3>Output Frequency Analysis</h3>
+            <canvas id="outputCanvas"></canvas>
+            
+            <div class="download-section">
+                <button id="downloadBtn" disabled>Download Filtered Audio</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let audioContext;
+        let inputBuffer = null;
+        let outputBuffer = null;
+        let inputSource = null;
+        let outputSource = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let minFreq = 20;
+        let maxFreq = 20000;
+        let quality = 1.0;
+        
+        // Audio visualization variables
+        let inputAnalyser = null;
+        let outputAnalyser = null;
+        let inputCanvas = document.getElementById('inputCanvas');
+        let outputCanvas = document.getElementById('outputCanvas');
+        let inputCanvasCtx = inputCanvas.getContext('2d');
+        let outputCanvasCtx = outputCanvas.getContext('2d');
+        
+        // Elements
+        const recordBtn = document.getElementById('recordBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const fileInput = document.getElementById('fileInput');
+        const playInputBtn = document.getElementById('playInputBtn');
+        const applyFilterBtn = document.getElementById('applyFilterBtn');
+        const playOutputBtn = document.getElementById('playOutputBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const inputDuration = document.getElementById('inputDuration');
+        const outputStatus = document.getElementById('outputStatus');
+        
+        // Slider elements
+        const minFreqSlider = document.getElementById('minFreq');
+        const maxFreqSlider = document.getElementById('maxFreq');
+        const qualitySlider = document.getElementById('quality');
+        const minFreqValue = document.getElementById('minFreqValue');
+        const maxFreqValue = document.getElementById('maxFreqValue');
+        const qualityValue = document.getElementById('qualityValue');
+        
+        // Initialize the audio context
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create analyzers
+                inputAnalyser = audioContext.createAnalyser();
+                inputAnalyser.fftSize = 2048;
+                
+                outputAnalyser = audioContext.createAnalyser();
+                outputAnalyser.fftSize = 2048;
+            }
+            
+            return audioContext;
+        }
+        
+        // Function to handle microphone recording
+        recordBtn.addEventListener('click', async () => {
+            try {
+                initAudioContext();
+                
+                if (!isRecording) {
+                    // Start recording
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    mediaRecorder = new MediaRecorder(stream);
+                    recordedChunks = [];
+                    
+                    mediaRecorder.addEventListener('dataavailable', (e) => {
+                        if (e.data.size > 0) {
+                            recordedChunks.push(e.data);
+                        }
+                    });
+                    
+                    mediaRecorder.addEventListener('stop', async () => {
+                        const audioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+                        await processAudioBlob(audioBlob);
+                        recordingStatus.textContent = 'Recording processed and ready.';
+                        recordBtn.textContent = 'Record from Microphone';
+                        isRecording = false;
+                    });
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordBtn.textContent = 'Stop Recording';
+                    recordingStatus.textContent = 'Recording... (click again to stop)';
+                } else {
+                    // Stop recording
+                    mediaRecorder.stop();
+                    recordingStatus.textContent = 'Processing recording...';
+                }
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                recordingStatus.textContent = 'Error: Could not access microphone. ' + err.message;
+            }
+        });
+        
+        // Function to handle file uploads
+        fileInput.addEventListener('change', async (event) => {
+            if (event.target.files.length > 0) {
+                const file = event.target.files[0];
+                try {
+                    await processAudioBlob(file);
+                    recordingStatus.textContent = 'File processed and ready.';
+                } catch (err) {
+                    console.error('Error processing audio file:', err);
+                    recordingStatus.textContent = 'Error processing audio file: ' + err.message;
+                }
+            }
+        });
+        
+        // Process audio blob (from recording or file upload)
+        async function processAudioBlob(blob) {
+            initAudioContext();
+            
+            const arrayBuffer = await blob.arrayBuffer();
+            inputBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            inputDuration.textContent = 'Duration: ' + inputBuffer.duration.toFixed(2) + ' seconds';
+            playInputBtn.disabled = false;
+            applyFilterBtn.disabled = false;
+            
+            // Draw the input frequency spectrum
+            drawFrequencyData(inputBuffer, inputCanvasCtx, inputCanvas);
+        }
+        
+        // Play input audio
+        playInputBtn.addEventListener('click', () => {
+            if (inputBuffer && audioContext) {
+                // Stop any currently playing audio
+                if (inputSource) {
+                    inputSource.stop();
+                }
+                
+                inputSource = audioContext.createBufferSource();
+                inputSource.buffer = inputBuffer;
+                
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                
+                inputSource.connect(analyser);
+                analyser.connect(audioContext.destination);
+                
+                inputSource.start();
+                
+                // Visualize in real-time
+                visualizeRealTime(analyser, inputCanvasCtx, inputCanvas);
+            }
+        });
+        
+        // Apply band pass filter
+        applyFilterBtn.addEventListener('click', async () => {
+            if (!inputBuffer || !audioContext) {
+                return;
+            }
+            
+            outputStatus.textContent = 'Applying filter...';
+            
+            // Create offline context for processing
+            const offlineContext = new OfflineAudioContext(
+                inputBuffer.numberOfChannels,
+                inputBuffer.length,
+                inputBuffer.sampleRate
+            );
+            
+            // Create source and filters
+            const source = offlineContext.createBufferSource();
+            source.buffer = inputBuffer;
+            
+            const filter = offlineContext.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = (minFreq + maxFreq) / 2;
+            filter.Q.value = quality;
+            
+            // Connect the nodes
+            source.connect(filter);
+            filter.connect(offlineContext.destination);
+            
+            // Start rendering
+            source.start();
+            
+            try {
+                outputBuffer = await offlineContext.startRendering();
+                
+                outputStatus.textContent = 'Filter applied successfully!';
+                playOutputBtn.disabled = false;
+                downloadBtn.disabled = false;
+                
+                // Draw the output frequency spectrum
+                drawFrequencyData(outputBuffer, outputCanvasCtx, outputCanvas);
+            } catch (err) {
+                console.error('Error applying filter:', err);
+                outputStatus.textContent = 'Error applying filter: ' + err.message;
+            }
+        });
+        
+        // Play filtered output
+        playOutputBtn.addEventListener('click', () => {
+            if (outputBuffer && audioContext) {
+                // Stop any currently playing audio
+                if (outputSource) {
+                    outputSource.stop();
+                }
+                
+                outputSource = audioContext.createBufferSource();
+                outputSource.buffer = outputBuffer;
+                
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                
+                outputSource.connect(analyser);
+                analyser.connect(audioContext.destination);
+                
+                outputSource.start();
+                
+                // Visualize in real-time
+                visualizeRealTime(analyser, outputCanvasCtx, outputCanvas);
+            }
+        });
+        
+        // Download filtered audio
+        downloadBtn.addEventListener('click', () => {
+            if (!outputBuffer) return;
+            
+            // Convert AudioBuffer to WAV
+            const wav = audioBufferToWav(outputBuffer);
+            const blob = new Blob([wav], { type: 'audio/wav' });
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'filtered_audio.wav';
+            a.click();
+            
+            // Clean up
+            URL.revokeObjectURL(url);
+        });
+        
+        // Update slider values
+        minFreqSlider.addEventListener('input', (e) => {
+            minFreq = parseInt(e.target.value);
+            minFreqValue.textContent = minFreq;
+            
+            // Ensure min doesn't exceed max
+            if (minFreq > maxFreq) {
+                maxFreqSlider.value = minFreq;
+                maxFreq = minFreq;
+                maxFreqValue.textContent = maxFreq;
+            }
+        });
+        
+        maxFreqSlider.addEventListener('input', (e) => {
+            maxFreq = parseInt(e.target.value);
+            maxFreqValue.textContent = maxFreq;
+            
+            // Ensure max doesn't go below min
+            if (maxFreq < minFreq) {
+                minFreqSlider.value = maxFreq;
+                minFreq = maxFreq;
+                minFreqValue.textContent = minFreq;
+            }
+        });
+        
+        qualitySlider.addEventListener('input', (e) => {
+            quality = parseFloat(e.target.value);
+            qualityValue.textContent = quality.toFixed(1);
+        });
+        
+        // Function to draw frequency data of an AudioBuffer
+        function drawFrequencyData(audioBuffer, canvasCtx, canvas) {
+            if (!audioBuffer) return;
+            
+            // Create temporary offline context
+            const offlineCtx = new OfflineAudioContext(
+                audioBuffer.numberOfChannels,
+                audioBuffer.length,
+                audioBuffer.sampleRate
+            );
+            
+            const analyser = offlineCtx.createAnalyser();
+            analyser.fftSize = 2048;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            const source = offlineCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(analyser);
+            analyser.connect(offlineCtx.destination);
+            
+            // Start source and get frequency data
+            source.start();
+            offlineCtx.startRendering().then(() => {
+                analyser.getByteFrequencyData(dataArray);
+                drawSpectrumWhenReady(dataArray, canvasCtx, canvas);
+            });
+        }
+        
+        // Draw spectrum from data
+        function drawSpectrumWhenReady(dataArray, canvasCtx, canvas) {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            canvasCtx.clearRect(0, 0, width, height);
+            canvasCtx.fillStyle = '#f5f5f5';
+            canvasCtx.fillRect(0, 0, width, height);
+            
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = '#4CAF50';
+            canvasCtx.beginPath();
+            
+            const sliceWidth = width * 1.0 / dataArray.length;
+            let x = 0;
+            
+            for(let i = 0; i < dataArray.length; i++) {
+                const v = dataArray[i] / 255.0;
+                const y = height - v * height;
+                
+                if(i === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            canvasCtx.stroke();
+            
+            // Draw frequency markers
+            drawFrequencyMarkers(canvasCtx, width, height);
+            
+            // Highlight band pass region if filter is active
+            if (minFreq > 20 || maxFreq < 20000) {
+                highlightBandPassRegion(canvasCtx, width, height);
+            }
+        }
+        
+        // Function to visualize audio in real-time
+        function visualizeRealTime(analyser, canvasCtx, canvas) {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            function draw() {
+                requestAnimationFrame(draw);
+                
+                analyser.getByteFrequencyData(dataArray);
+                
+                canvasCtx.clearRect(0, 0, width, height);
+                canvasCtx.fillStyle = '#f5f5f5';
+                canvasCtx.fillRect(0, 0, width, height);
+                
+                canvasCtx.lineWidth = 2;
+                canvasCtx.strokeStyle = '#4CAF50';
+                canvasCtx.beginPath();
+                
+                const sliceWidth = width * 1.0 / bufferLength;
+                let x = 0;
+                
+                for(let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 255.0;
+                    const y = height - v * height;
+                    
+                    if(i === 0) {
+                        canvasCtx.moveTo(x, y);
+                    } else {
+                        canvasCtx.lineTo(x, y);
+                    }
+                    
+                    x += sliceWidth;
+                }
+                
+                canvasCtx.stroke();
+                
+                // Draw frequency markers
+                drawFrequencyMarkers(canvasCtx, width, height);
+                
+                // Highlight band pass region if filter is active
+                if (minFreq > 20 || maxFreq < 20000) {
+                    highlightBandPassRegion(canvasCtx, width, height);
+                }
+            }
+            
+            draw();
+        }
+        
+        // Draw frequency markers on the canvas
+        function drawFrequencyMarkers(canvasCtx, width, height) {
+            const frequencies = [100, 500, 1000, 5000, 10000, 20000];
+            const sampleRate = audioContext?.sampleRate || 44100;
+            const fftSize = 2048;
+            const binCount = fftSize / 2;
+            
+            canvasCtx.fillStyle = '#666';
+            canvasCtx.font = '10px Arial';
+            canvasCtx.textAlign = 'center';
+            
+            frequencies.forEach(freq => {
+                if (freq <= sampleRate / 2) { // Nyquist limit
+                    const xPos = Math.floor(freq / (sampleRate / 2) * width);
+                    
+                    canvasCtx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+                    canvasCtx.fillRect(xPos, 0, 1, height);
+                    
+                    const freqLabel = freq >= 1000 ? (freq / 1000) + 'kHz' : freq + 'Hz';
+                    canvasCtx.fillStyle = '#333';
+                    canvasCtx.fillText(freqLabel, xPos, height - 5);
+                }
+            });
+        }
+        
+        // Highlight band pass region
+        function highlightBandPassRegion(canvasCtx, width, height) {
+            const sampleRate = audioContext?.sampleRate || 44100;
+            
+            // Convert frequencies to x positions
+            const minFreqX = Math.floor(minFreq / (sampleRate / 2) * width);
+            const maxFreqX = Math.floor(maxFreq / (sampleRate / 2) * width);
+            
+            // Draw highlighted area
+            canvasCtx.fillStyle = 'rgba(76, 175, 80, 0.15)';
+            canvasCtx.fillRect(minFreqX, 0, maxFreqX - minFreqX, height);
+            
+            // Draw borders
+            canvasCtx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
+            canvasCtx.lineWidth = 2;
+            
+            // Min frequency line
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(minFreqX, 0);
+            canvasCtx.lineTo(minFreqX, height);
+            canvasCtx.stroke();
+            
+            // Max frequency line
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(maxFreqX, 0);
+            canvasCtx.lineTo(maxFreqX, height);
+            canvasCtx.stroke();
+            
+            // Labels
+            canvasCtx.fillStyle = '#333';
+            canvasCtx.font = '12px Arial';
+            canvasCtx.textAlign = 'center';
+            canvasCtx.fillText(minFreq + 'Hz', minFreqX, 15);
+            canvasCtx.fillText(maxFreq + 'Hz', maxFreqX, 15);
+        }
+        
+        // Convert AudioBuffer to WAV format
+        function audioBufferToWav(buffer) {
+            const numOfChan = buffer.numberOfChannels;
+            const length = buffer.length * numOfChan * 2 + 44;
+            const arrayBuffer = new ArrayBuffer(length);
+            const view = new DataView(arrayBuffer);
+            const channels = [];
+            let offset = 0;
+            let pos = 0;
+            
+            // Extract channels
+            for (let i = 0; i < numOfChan; i++) {
+                channels.push(buffer.getChannelData(i));
+            }
+            
+            // Write WAV header
+            // "RIFF" chunk descriptor
+            writeUTFBytes(view, 0, 'RIFF');
+            view.setUint32(4, length - 8, true);
+            writeUTFBytes(view, 8, 'WAVE');
+            
+            // "fmt " sub-chunk
+            writeUTFBytes(view, 12, 'fmt ');
+            view.setUint32(16, 16, true); // size of fmt chunk
+            view.setUint16(20, 1, true); // format = PCM
+            view.setUint16(22, numOfChan, true); // channels
+            view.setUint32(24, buffer.sampleRate, true); // sample rate
+            view.setUint32(28, buffer.sampleRate * 2 * numOfChan, true); // byte rate
+            view.setUint16(32, numOfChan * 2, true); // block align
+            view.setUint16(34, 16, true); // bits per sample
+            
+            // "data" sub-chunk
+            writeUTFBytes(view, 36, 'data');
+            view.setUint32(40, length - 44, true);
+            
+            // Write interleaved data
+            offset = 44;
+            for (let i = 0; i < buffer.length; i++) {
+                for (let ch = 0; ch < numOfChan; ch++) {
+                    // Clamp between -1 and 1
+                    const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+                    // Convert to 16-bit signed integer
+                    const value = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                    view.setInt16(offset, value, true);
+                    offset += 2;
+                }
+            }
+            
+            return arrayBuffer;
+        }
+        
+        // Helper to write strings to DataView
+        function writeUTFBytes(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+        
+        // Resize canvas when window is resized
+        window.addEventListener('resize', () => {
+            if (inputBuffer) {
+                drawFrequencyData(inputBuffer, inputCanvasCtx, inputCanvas);
+            }
+            if (outputBuffer) {
+                drawFrequencyData(outputBuffer, outputCanvasCtx, outputCanvas);
+            }
+        });
+    </script>
+</body>
+</html>
